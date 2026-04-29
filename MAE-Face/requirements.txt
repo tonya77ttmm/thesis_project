@@ -1,0 +1,14 @@
+# Data Processing & Computer Vision
+numpy
+pandas
+opencv-python-headless
+
+# Deep Learning (PyTorch Stack)
+torch
+torchvision
+torchaudio
+timm
+
+# Utilities
+scipy
+matplotlib
