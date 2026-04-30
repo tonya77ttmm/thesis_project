@@ -5,10 +5,11 @@ import shutil
 import pandas as pd
 OPEN_FACE_DIR="../OpenFace/build/bin/FaceLandmarkImg"
 
+#this is slow
 def upscale_folder(extract_path, upscale_path, scale_factor=2):
     os.makedirs(upscale_path,exist_ok=True)
     for frame in os.listdir(extract_path):
-        if frame.endswith(".jpg"):
+        if frame.endswith(".png"):
             img=cv2.imread(os.path.join(extract_path,frame))
             img_resize=cv2.resize(img, (0, 0), fx=scale_factor, fy=scale_factor)
             cv2.imwrite(os.path.join(upscale_path,frame), img_resize)
@@ -54,7 +55,7 @@ def flatten_openface_output(faces_path):
     #             shutil.rmtree(os.path.join(root,d))
 
 
-def extract_face_landmarks(dataset_dir):
+# def extract_face_landmarks_daisee(dataset_dir):
     for usr in os.listdir(dataset_dir):
         if usr in unfinished_usr_training_folders:
             usr_path=os.path.join(dataset_dir,usr)
@@ -72,7 +73,7 @@ def extract_face_landmarks(dataset_dir):
                 print(f"Finished processing {extract_path}")
                 flatten_openface_output(faces_path)
                 
-def extract_face_landmarks_val(dataset_dir):
+def extract_face_landmarks_daisee(dataset_dir):
     for usr in os.listdir(dataset_dir):
         usr_path=os.path.join(dataset_dir,usr)
         for extract in os.listdir(usr_path):
@@ -92,16 +93,17 @@ def extract_face_landmarks_val(dataset_dir):
                 
 
 if __name__ == "__main__":
-    #training_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Train/"
+    training_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Train/"
+    extract_face_landmarks_daisee(training_dataset_dir)
     #extract_face_landmarks(training_dataset_dir)
     #print(f"Finished extracting training dataset")
 
 
-    #validation_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Validation/"
-    #extract_face_landmarks_val(validation_dataset_dir)
+    validation_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Validation/"
+    extract_face_landmarks_daisee(validation_dataset_dir)
     
     test_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Test/"
-    extract_face_landmarks_val(test_dataset_dir)
+    extract_face_landmarks_daisee(test_dataset_dir)
     
     print(f"Finished extracting validation dataset")
 
