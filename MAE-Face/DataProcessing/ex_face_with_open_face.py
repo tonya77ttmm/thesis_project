@@ -89,6 +89,22 @@ def extract_face_landmarks_daisee(dataset_dir):
             
             print(f"Finished processing {extract_path}")
             flatten_openface_output(faces_path)
+# RELEASE SPACE
+            print(f"Finished processing {extract_path}")
+            print(f"start deleting all png files under {extract_path}")
+            for file in os.listdir(extract_path):
+                if file.endswith(".png"):
+                    os.remove(os.path.join(extract_path,file))
+            print(f"start deleting upscale folder under {extract_path}")
+            if os.path.exists(upscale_path):
+                shutil.rmtree(upscale_path)
+
+            openFaces_folder=os.path.join(extract_path,"openFaces")
+            print(f"start deleting all jpg files under  {extract_path}")
+            for file in os.listdir(openFaces_folder):
+                if file.endswith(".jpg"):
+                    os.remove(os.path.join(openFaces_folder,file))
+            print(f"Released space for {extract_path}")
 
                 
 
