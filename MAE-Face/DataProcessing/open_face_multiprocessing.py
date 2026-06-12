@@ -107,13 +107,42 @@ def extract_face_landmarks_daisee(dataset_dir):
                     os.remove(os.path.join(openFaces_folder,file))
             print(f"Released space for {extract_path}")
 
+
+# val_users=["799402","826382"]
+
 def create_task_list(dataset_dir):
     task_list=[]
     for usr in os.listdir(dataset_dir):
-        usr_path=os.path.join(dataset_dir,usr)
-        for extract in os.listdir(usr_path):
-            extract_path=os.path.join(usr_path,extract)
+        if usr in val_users:
+            usr_path=os.path.join(dataset_dir,usr)
+            for extract in os.listdir(usr_path):
+                extract_path=os.path.join(usr_path,extract)
+                task_list.append(extract_path)
+    return task_list
+
+# def create_task_list_devmo(dataset_dir):
+    
+
+def create_task_list_devmo(dataset_dir):
+
+    task_list = []
+
+    for usr in os.listdir(dataset_dir):
+
+        extract_path = os.path.join(dataset_dir, usr)
+
+        # Ignore .mp4 and .json files
+
+        if usr.endswith(".mp4") or usr.endswith(".json"):
+
+            continue
+
+        # Only add folders (frame directories)
+
+        if os.path.isdir(extract_path):
+
             task_list.append(extract_path)
+
     return task_list
                 
 def extract_face_landmarks(extract_path):
@@ -124,50 +153,79 @@ def extract_face_landmarks(extract_path):
     upscale_path=os.path.join(extract_path,"upscale")
     upscale_folder(extract_path, upscale_path,2)
 
+    if not os.listdir(upscale_path):
+        return
     faces_path=os.path.join(extract_path,"openFaces")
     os.makedirs(faces_path,exist_ok=True)
 
     command = [OPEN_FACE_DIR, "-fdir", upscale_path, "-out_dir", faces_path]
     subprocess.run(command)
-            
-    
+
     flatten_openface_output(faces_path)
     print(f"Finished processing {extract_path}")
     # RELEASE SPACE
     print(f"start deleting all png files under {extract_path}")
     for file in os.listdir(extract_path):
         if file.endswith(".png"):
-            os.remove(os.path.join(extract_path,file))
+            file_path=os.path.join(extract_path,file)
+            print(f"deleting {file_path}")
+            os.remove(file_path)
     print(f"start deleting upscale folder under {extract_path}")
     if os.path.exists(upscale_path):
         shutil.rmtree(upscale_path)
+    else:
+        print(f"upscale folder {upscale_path} does not exist, skipping deletion")
 
     openFaces_folder=os.path.join(extract_path,"openFaces")
     print(f"start deleting all jpg files under  {extract_path}")
     for file in os.listdir(openFaces_folder):
         if file.endswith(".jpg"):
             os.remove(os.path.join(openFaces_folder,file))
+            print(f"deleting {file}")
+    print(f"Released space for {extract_path}")
+
+def pre_release(extract_path):
+    # for usr in os.listdir(dataset_dir):
+    #     usr_path=os.path.join(dataset_dir,usr)
+    #     for extract in os.listdir(usr_path):
+    #extract_path=os.path.join(usr_path,extract)
+    upscale_path=os.path.join(extract_path,"upscale")
+    print(f"start deleting upscale folder  {upscale_path}")
+    if os.path.exists(upscale_path):
+        shutil.rmtree(upscale_path)
+        print(f"Deleted upscale folder  {upscale_path}")
+    openFaces_folder=os.path.join(extract_path,"openFaces")
+    print(f"start deleting openFaces folder  {openFaces_folder}")
+    if os.path.exists(openFaces_folder):
+        shutil.rmtree(openFaces_folder)
+        print(f"Deleted openFaces folder  {openFaces_folder}")
     print(f"Released space for {extract_path}")
 
 if __name__ == "__main__":
-    training_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Train/"
+    # training_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Train/"
     # extract_face_landmarks_daisee(training_dataset_dir)
     #extract_face_landmarks(training_dataset_dir)
     #print(f"Finished extracting training dataset")
 
-
-    validation_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Validation/"
+    devmo_dataset_dir="../../confusion_dataset/Devmo/devemo+/"
+    # validation_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Validation/"
     # extract_face_landmarks_daisee(validation_dataset_dir)
     
-    test_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Test/"
+    # test_dataset_dir="../../confusion_dataset/DAiSEE/DataSet/Test/"
     # extract_face_landmarks_daisee(test_dataset_dir)
     
-    print(f"Finished extracting validation dataset")
+    # tasks_list=create_task_list(training_dataset_dir)
+    #
+    # tasks_list+=create_task_list(test_dataset_dir)
+    # print("start releasing")
+    devmo_tasks_list=create_task_list_devmo(devmo_dataset_dir)
+    for extract_path in devmo_tasks_list:
+        # pre_release(extract_path)
+        extract_face_landmarks(extract_path)
+    
+    # print("finish releasing")
 
-    tasks_list=create_task_list(training_dataset_dir)
-    tasks_list+=create_task_list(validation_dataset_dir)
-    tasks_list+=create_task_list(test_dataset_dir)
-
-
-    with Pool(6) as p:
-        p.map(extract_face_landmarks, tasks_list, chunksize=10)
+    
+    # with Pool(6) as p:
+    #     p.map(extract_face_landmarks, tasks_list, chunksize=1)
+    #it should only have cropped faces and release some space , it works

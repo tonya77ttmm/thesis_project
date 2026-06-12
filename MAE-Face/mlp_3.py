@@ -104,6 +104,7 @@ def build_sampler(dataset, class_weights):
 #     return features_padded, labels_padded
 
 def evaluate(model, loader, device, threshold=0.3):
+    print("Evaluating on validation set... with threshold:", threshold)
     model.eval()
 
     all_preds, all_labels = [], []
@@ -113,8 +114,13 @@ def evaluate(model, loader, device, threshold=0.3):
             features = features.to(device) # Shape: [batch_size, 768]
             labels = labels.to(device)     # Shape: [batch_size]
 
-            outputs = model(features)
-            preds = outputs.argmax(dim=1)
+            outputs = model(features)# 1. Turn raw outputs into a clear percentage score (0.0 to 1.0)
+            probabilities = torch.softmax(outputs, dim=1)[:, 1]
+            
+            # 2. If the probability is greater than our 75% threshold, it's a 1 (Threat)
+            #    Otherwise, it's a 0 (Safe).
+            preds = (probabilities >= threshold).long()
+            # preds = outputs.argmax(dim=1)
 
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
@@ -134,8 +140,8 @@ def train_mlp_grid_search(input_size,hidden_layers,dropout_rate,num_classes,lear
     # ==========================================
     # CHANGE 3: Point to .npy files instead of dirs
     # ==========================================
-    train_feat = "./Features/Numpy_features/Train_feats_cc.npy"
-    train_lab  = "./Features/Numpy_features/Train_labels_cc.npy"
+    train_feat = "./Features/Numpy_features/Train_v2_feats_cc.npy"
+    train_lab  = "./Features/Numpy_features/Train_v2_labels_cc.npy"
     val_feat   = "./Features/Numpy_features/Val_feats_cc.npy"
     val_lab    = "./Features/Numpy_features/Val_labels_cc.npy"
 
@@ -150,10 +156,10 @@ def train_mlp_grid_search(input_size,hidden_layers,dropout_rate,num_classes,lear
 
     # ===== IMBALANCE HANDLING =====
     class_weights = compute_class_weights(train_dataset, device)
-    sampler = build_sampler(train_dataset, class_weights)
+    # sampler = build_sampler(train_dataset, class_weights)
        
     # num_workers=4 helps fetch data from disk while GPU is training
-    train_loader = DataLoader(train_dataset, batch_size=64, sampler=sampler, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=64, num_workers=4)
 
 
@@ -168,7 +174,7 @@ def train_mlp_grid_search(input_size,hidden_layers,dropout_rate,num_classes,lear
         optimizer=optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         #BUG maybe try weighted loss which are proportional to the class number in the training dataset
         # Pass the class weights you already calculated to the criterion
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(weight=class_weights)
         # criterion=nn.CrossEntropyLoss(ignore_index=-100)
         #scheduler=ReduceLROnPlateau(optimizer,mode="max",factor=0.1,patience=3) #what is verbose=True?
         # criterion = FocalLoss(alpha=class_weights)
@@ -178,6 +184,7 @@ def train_mlp_grid_search(input_size,hidden_layers,dropout_rate,num_classes,lear
         best_acc=0
         best_prec=0
         best_rec=0
+        best_epoch=0
         epochs_no_improve=0
         best_model_state=None
         for epoch in range(num_epochs):
@@ -212,7 +219,7 @@ def train_mlp_grid_search(input_size,hidden_layers,dropout_rate,num_classes,lear
             
             # --- Validation Section ---
             # ===== VALIDATION =====
-            f1_conf, prec_conf, rec_conf, acc_conf = evaluate(model, val_loader, device)
+            f1_conf, prec_conf, rec_conf, acc_conf = evaluate(model, val_loader, device, threshold=0.6)
             print(f"VAL → Conf F1: {f1_conf:.4f}, Conf Precision: {prec_conf:.4f}, Conf Recall: {rec_conf:.4f}, Accuracy: {acc_conf:.4f}")
 
             # scheduler.step(f1_conf)
@@ -225,6 +232,7 @@ def train_mlp_grid_search(input_size,hidden_layers,dropout_rate,num_classes,lear
                 best_rec = rec_conf
                 best_model_state = copy.deepcopy(model.state_dict())
                 #epochs_no_improve = 0
+                best_epoch = epoch + 1
             # else:
             #     epochs_no_improve += 1
 
@@ -241,7 +249,8 @@ def train_mlp_grid_search(input_size,hidden_layers,dropout_rate,num_classes,lear
             'best_val_f1': best_f1,
             'best_val_acc': best_acc,
             'best_val_prec': best_prec,
-            'best_val_rec': best_rec
+            'best_val_rec': best_rec,
+            'best_epoch': best_epoch
         }, save_path)
 
         print(f"Saved best model → {save_path}")
@@ -290,19 +299,26 @@ if __name__ == "__main__":
     input_size=768
      # Grid search architectures
     hidden_layer_variants = [
+        [32],
+        [64],
+        [64, 32],
+        [128],
+        [128, 64],
         [256],
+        [256, 128],
+        [256, 128, 64],
         [512],
         [1024],
         [512, 256],
         [1024, 512]
     ]
-    dropout_rate=0.5
+    dropout_rate=0.3
     num_classes=2
    # learning_rate=1e-4,3,2
     learning_rate=1e-4
-    weight_decay=1e-5
+    weight_decay=1e-3
     # batch_size=4
-    num_epochs=200
+    num_epochs=100
     patience=5
     device='cuda'
     train_mlp_grid_search(input_size,hidden_layer_variants,dropout_rate,num_classes,learning_rate,weight_decay,num_epochs,patience,device)
@@ -320,5 +336,6 @@ if __name__ == "__main__":
         acc=checkpoint['best_val_acc']
         prec=checkpoint['best_val_prec']
         rec=checkpoint['best_val_rec']
-        print(f"f1{f1}, acc{acc}, prec{prec}, rec{rec}  in {ckpt_path}")
+        epoch=checkpoint['best_epoch']
+        print(f"f1{f1}, acc{acc}, prec{prec}, rec{rec}, epoch{epoch} in {ckpt_path}")
         

@@ -29,9 +29,12 @@ def release_space(dataset_path):
             print(f"Released space for {extract_path}")
 
 if __name__=="__main__":
-    train_dataset_path="../../confusion_dataset/DAiSEE/DataSet/Train/"
-    val_dataset_path="../../confusion_dataset/DAiSEE/DataSet/Validation/"
-    release_space(train_dataset_path)
-    release_space(val_dataset_path)
+    # train_dataset_path="../../confusion_dataset/DAiSEE/DataSet/Train/"
+    # val_dataset_path="../../confusion_dataset/DAiSEE/DataSet/Validation/"
+    test_dataset_path="../../confusion_dataset/DAiSEE/DataSet/Test/"
+    # release_space(train_dataset_path)
+    # release_space(val_dataset_path)
+    release_space(test_dataset_path)
+
     print("Space released for both training and validation datasets")
    
