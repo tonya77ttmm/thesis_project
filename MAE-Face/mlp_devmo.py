@@ -467,9 +467,281 @@ def train_mlp_grid_search(input_size, hidden_grid, lr_grid, wd_grid, drop_grid, 
     csv_file_path = "models/MLP/devmo+2/mlp_grid_search_results.csv"
     results_df.to_csv(csv_file_path, index=False)
     print(f"\n📊 [SAVED CSV LOG] Grid search results file saved to: {csv_file_path}\n")
+
+def estimate_best_epoch(
+    input_size,
+    architecture,
+    lr,
+    wd,
+    dropout,
+    threshold,
+    num_classes=2,
+    num_epochs=60,
+    device='cuda'
+):
+    """
+    Run 5-fold CV using the already-selected hyperparameters.
+    Return average epoch where best validation F1 occurred.
+    """
+
+    data_dir = "./Features/Numpy_features"
+
+    best_epochs = []
+
+    for fold in range(5):
+
+        print(f"\n===== Fold {fold} =====")
+
+        train_feat = os.path.join(
+            data_dir,
+            f"Devmo-fold{fold}_feats.npy"
+        )
+
+        train_lab = os.path.join(
+            data_dir,
+            f"Devmo-fold{fold}_labels.npy"
+        )
+
+        val_feat = os.path.join(
+            data_dir,
+            f"Devmo-fold{fold}-val_feats.npy"
+        )
+
+        val_lab = os.path.join(
+            data_dir,
+            f"Devmo-fold{fold}-val_labels.npy"
+        )
+
+        train_count = os.path.getsize(train_feat) // (768 * 4)
+        val_count = os.path.getsize(val_feat) // (768 * 4)
+
+        train_dataset = FeatureDataset(
+            train_feat,
+            train_lab,
+            num_samples=train_count
+        )
+
+        val_dataset = FeatureDataset(
+            val_feat,
+            val_lab,
+            num_samples=val_count
+        )
+
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=64,
+            shuffle=True,
+            num_workers=4
+        )
+
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=64,
+            num_workers=4
+        )
+
+        class_weights = compute_class_weights(
+            train_dataset,
+            device
+        )
+
+        model = EmotionMLP(
+            input_size=input_size,
+            hidden_layers=architecture,
+            dropout_rate=dropout,
+            num_classes=num_classes
+        ).to(device)
+
+        optimizer = optim.Adam(
+            model.parameters(),
+            lr=lr,
+            weight_decay=wd
+        )
+
+        criterion = nn.CrossEntropyLoss(
+            weight=class_weights
+        )
+
+        scheduler = ReduceLROnPlateau(
+            optimizer,
+            mode='min',
+            factor=0.5,
+            patience=5
+        )
+
+        best_f1 = -1
+        best_epoch = 0
+
+        epochs_no_improve = 0
+        early_stop_patience = 10
+
+        for epoch in range(num_epochs):
+
+            model.train()
+
+            for features, labels in train_loader:
+
+                features = features.to(device)
+                labels = labels.to(device)
+
+                optimizer.zero_grad()
+
+                outputs = model(features)
+
+                loss = criterion(outputs, labels)
+
+                loss.backward()
+
+                optimizer.step()
+
+            metrics, val_loss = evaluate_all_thresholds(
+                model,
+                val_loader,
+                device,
+                [threshold]
+            )
+
+            scheduler.step(val_loss)
+
+            current_f1 = metrics[threshold]['f1']
+
+            if current_f1 > best_f1:
+
+                best_f1 = current_f1
+                best_epoch = epoch + 1
+
+                epochs_no_improve = 0
+
+            else:
+                epochs_no_improve += 1
+
+            if epochs_no_improve >= early_stop_patience:
+                break
+
+        best_epochs.append(best_epoch)
+
+        print(
+            f"Fold {fold}: "
+            f"Best F1={best_f1:.4f} "
+            f"at Epoch {best_epoch}"
+        )
+
+    avg_best_epoch = int(round(np.mean(best_epochs)))
+
+    print("\n====================================")
+    print(f"Best Epochs: {best_epochs}")
+    print(f"Average Best Epoch: {avg_best_epoch}")
+    print("====================================")
+
+    return avg_best_epoch
+
+def train_final_model(
+    input_size,
+    architecture,
+    lr,
+    wd,
+    dropout,
+    epochs,
+    train_feat_path,
+    train_label_path,
+    device='cuda'
+):
+
+    train_count = os.path.getsize(train_feat_path) // (768 * 4)
+
+    train_dataset = FeatureDataset(
+        train_feat_path,
+        train_label_path,
+        num_samples=train_count
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=64,
+        shuffle=True,
+        num_workers=4
+    )
+
+    class_weights = compute_class_weights(train_dataset, device)
+
+    model = EmotionMLP(
+        input_size=input_size,
+        hidden_layers=architecture,
+        dropout_rate=dropout,
+        num_classes=2
+    ).to(device)
+
+    optimizer = optim.Adam(
+        model.parameters(),
+        lr=lr,
+        weight_decay=wd
+    )
+
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+
+    for epoch in range(epochs):
+
+        model.train()
+        running_loss = 0
+
+        for features, labels in train_loader:
+
+            features = features.to(device)
+            labels = labels.to(device)
+
+            optimizer.zero_grad()
+            outputs = model(features)
+            loss = criterion(outputs, labels)
+
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item()
+
+        print(f"[{architecture}] Epoch {epoch+1}/{epochs} Loss={running_loss/len(train_loader):.4f}")
+
+    return model
+
+def test_model(model, test_loader, threshold, device='cuda'):
+
+    model.eval()
+
+    all_labels = []
+    all_probs = []
+
+    with torch.no_grad():
+
+        for features, labels in test_loader:
+
+            features = features.to(device)
+            labels = labels.to(device)
+
+            outputs = model(features)
+
+            probs = torch.softmax(outputs, dim=1)[:, 1]
+
+            all_labels.extend(labels.cpu().numpy())
+            all_probs.extend(probs.cpu().numpy())
+
+    all_labels = np.array(all_labels)
+    all_probs = np.array(all_probs)
+
+    preds = (all_probs >= threshold).astype(int)
+
+    return {
+        "f1": f1_score(all_labels, preds),
+        "acc": accuracy_score(all_labels, preds),
+        "prec": precision_score(all_labels, preds),
+        "rec": recall_score(all_labels, preds),
+        "kappa": cohen_kappa_score(all_labels, preds),
+        "auc": roc_auc_score(all_labels, all_probs)
+    }
+
 if __name__ == "__main__":
-    input_size=768
-     # Grid search architectures
+
+    data_dir = "./Features/Numpy_features"
+
+    results = []
     hidden_layer_variants = [
         [32],
         [64],
@@ -484,29 +756,142 @@ if __name__ == "__main__":
         [512, 256],
         [1024, 512]
     ]
-    learning_rates = [1e-3, 1e-4]
-    weight_decays = [1e-2,1e-3, 1e-4, 1e-5]
-    thresholds = [0.3,0.4, 0.5, 0.6,0.7, 0.8]
-    dropout_rates=[0.2,0.3, 0.4,0.5,0.6,0.7]
-    num_classes=2
-   # learning_rate=1e-4,3,2
-    # learning_rate=1e-4
-    # weight_decay=1e-3
-    # batch_size=4
-    num_epochs=100
-    patience=10
-    device='cuda'
-    #read the best models for each architecture 
+
     for h in hidden_layer_variants:
-        save_path = f"models/MLP/devmo+2/MLP_{'_'.join(map(str, h))}_best_structure_model.pth"
-        if os.path.exists(save_path):
-            checkpoint = torch.load(save_path, map_location='cpu', weights_only=False)
+
+        ckpt_path = f"models/MLP/devmo+2/MLP_{'_'.join(map(str,h))}_best_structure_model.pth"
+
+        checkpoint = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+
+        hp = checkpoint['hyperparameters']
+
+        print(f"\n========================")
+        print(f"Structure: {h}")
+
+        # 1. estimate best epoch
+        avg_epoch = estimate_best_epoch(
+            input_size=768,
+            architecture=h,
+            lr=hp['lr'],
+            wd=hp['wd'],
+            dropout=hp['dropout'],
+            threshold=hp['best_threshold'],
+            device='cuda'
+        )
+
+        # 2. final training on ALL 80%
+        model = train_final_model(
+            input_size=768,
+            architecture=h,
+            lr=hp['lr'],
+            wd=hp['wd'],
+            dropout=hp['dropout'],
+            epochs=avg_epoch,
+            train_feat_path=f"{data_dir}/Devmo-train_feats.npy",
+            train_label_path=f"{data_dir}/Devmo-train_labels.npy",
+            device='cuda'
+        )
+
+        # 3. test once
+        test_loader = DataLoader(
+            FeatureDataset(
+                f"{data_dir}/Devmo-test_feats.npy",
+                f"{data_dir}/Devmo-test_labels.npy",
+                num_samples=os.path.getsize(f"{data_dir}/Devmo-test_feats.npy") // (768 * 4)
+            ),
+            batch_size=64
+        )
+
+        metrics = test_model(
+            model,
+            test_loader,
+            threshold=hp['best_threshold']
+        )
+
+        results.append({
+            "structure": str(h),
+            **metrics
+        })
+
+        print(metrics)
+
+    # save results
+    df = pd.DataFrame(results)
+    df.to_csv("final_structure_comparison.csv", index=False)
+
+    print("\nDONE")
+# if __name__ == "__main__":
+#     input_size=768
+#      # Grid search architectures
+#     hidden_layer_variants = [
+#         [32],
+#         [64],
+#         [64, 32],
+#         [128],
+#         [128, 64],
+#         [256],
+#         [256, 128],
+#         [256, 128, 64],
+#         [512],
+#         [1024],
+#         [512, 256],
+#         [1024, 512]
+#     ]
+#     learning_rates = [1e-3, 1e-4]
+#     weight_decays = [1e-2,1e-3, 1e-4, 1e-5]
+#     thresholds = [0.3,0.4, 0.5, 0.6,0.7, 0.8]
+#     dropout_rates=[0.2,0.3, 0.4,0.5,0.6,0.7]
+#     num_classes=2
+#    # learning_rate=1e-4,3,2
+#     # learning_rate=1e-4
+#     # weight_decay=1e-3
+#     # batch_size=4
+#     num_epochs=100
+#     patience=10
+#     device='cuda'
+
+#     for h in hidden_layer_variants:
+#         save_path = (
+#         f"models/MLP/devmo+2/"
+#         f"MLP_{'_'.join(map(str,h))}_best_structure_model.pth"
+#     )
+
+#         checkpoint = torch.load(
+#         save_path,
+#         map_location='cpu',
+#         weights_only=False
+#     )
+
+#         hp = checkpoint['hyperparameters']
+
+#         avg_epoch = estimate_best_epoch(
+#         input_size=768,
+#         architecture=h,
+#         lr=hp['lr'],
+#         wd=hp['wd'],
+#         dropout=hp['dropout'],
+#         threshold=hp['best_threshold'],
+#         num_epochs=60,
+#         device='cuda'
+#     )
+
+#         print(
+#         f"\nArchitecture {h}"
+#         f"\nAvg Best Epoch = {avg_epoch}\n"
+#     )
+
+    
+    #read the best models for each architecture 
+    # for h in hidden_layer_variants:
+    #     save_path = f"models/MLP/devmo+2/MLP_{'_'.join(map(str, h))}_best_structure_model.pth"
+    #     if os.path.exists(save_path):
+    #         checkpoint = torch.load(save_path, map_location='cpu', weights_only=False)
             
-            hyperparameters = checkpoint['hyperparameters']
+    #         hyperparameters = checkpoint['hyperparameters']
             
-            print(f"Architecture: {h} | lr: {hyperparameters['lr']} |wd: {hyperparameters['wd']} | dropout: {hyperparameters['dropout']} |threshold: {hyperparameters['best_threshold']} | Fold 0 Best Val F1: {hyperparameters['avg_f1']:.4f} | Val Acc: {hyperparameters['avg_acc']:.4f},  Val AUC-ROC: {hyperparameters['avg_auc']:.4f}")
-        else:
-            print(f"No saved model found for architecture {h} at path: {save_path}")
+    #         print(f"Architecture: {h} | lr: {hyperparameters['lr']} |wd: {hyperparameters['wd']} | dropout: {hyperparameters['dropout']} |threshold: {hyperparameters['best_threshold']} | Fold 0 Best Val F1: {hyperparameters['avg_f1']:.4f} | Val Acc: {hyperparameters['avg_acc']:.4f},  Val AUC-ROC: {hyperparameters['avg_auc']:.4f}")
+    #     else:
+    #         print(f"No saved model found for architecture {h} at path: {save_path}")
     
 
     # train_mlp_grid_search(
