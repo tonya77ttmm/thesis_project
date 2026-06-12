@@ -767,37 +767,63 @@ if __name__ == "__main__":
 
         print(f"\n========================")
         print(f"Structure: {h}")
+        model = EmotionMLP(
+    input_size=768,
+    hidden_layers=h,
+    dropout_rate=hp['dropout'],
+    num_classes=2
+    ).to('cuda')
 
-        # 1. estimate best epoch
-        avg_epoch = estimate_best_epoch(
-            input_size=768,
-            architecture=h,
-            lr=hp['lr'],
-            wd=hp['wd'],
-            dropout=hp['dropout'],
-            threshold=hp['best_threshold'],
-            device='cuda'
-        )
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.eval()
+        val_feat_daisee = "./Features/Numpy_features/Val_feats_cc.npy"
+        val_lab_daisee  = "./Features/Numpy_features/Val_labels_cc.npy"
 
-        # 2. final training on ALL 80%
-        model = train_final_model(
-            input_size=768,
-            architecture=h,
-            lr=hp['lr'],
-            wd=hp['wd'],
-            dropout=hp['dropout'],
-            epochs=avg_epoch,
-            train_feat_path=f"{data_dir}/Devmo-train_feats.npy",
-            train_label_path=f"{data_dir}/Devmo-train_labels.npy",
-            device='cuda'
-        )
+        # # 1. estimate best epoch
+        # avg_epoch = estimate_best_epoch(
+        #     input_size=768,
+        #     architecture=h,
+        #     lr=hp['lr'],
+        #     wd=hp['wd'],
+        #     dropout=hp['dropout'],
+        #     threshold=hp['best_threshold'],
+        #     device='cuda'
+        # )
 
+        # # 2. final training on ALL 80%
+        # model = train_final_model(
+        #     input_size=768,
+        #     architecture=h,
+        #     lr=hp['lr'],
+        #     wd=hp['wd'],
+        #     dropout=hp['dropout'],
+        #     epochs=avg_epoch,
+        #     train_feat_path=f"{data_dir}/Devmo-train_feats.npy",
+        #     train_label_path=f"{data_dir}/Devmo-train_labels.npy",
+        #     device='cuda'
+        # )
+        # save_final_path = f"models/MLP/final_{'_'.join(map(str,h))}.pth"
+        # torch.save({
+
+        # "model_state_dict": model.state_dict(),
+
+        # "architecture": h,
+
+        # "lr": hp['lr'],
+
+        # "wd": hp['wd'],
+
+        # "dropout": hp['dropout'],
+
+        # "epochs": avg_epoch
+
+        # }, save_final_path)
         # 3. test once
         test_loader = DataLoader(
             FeatureDataset(
-                f"{data_dir}/Devmo-test_feats.npy",
-                f"{data_dir}/Devmo-test_labels.npy",
-                num_samples=os.path.getsize(f"{data_dir}/Devmo-test_feats.npy") // (768 * 4)
+                val_feat_daisee,
+                val_lab_daisee,
+                num_samples=os.path.getsize(val_feat_daisee) // (768 * 4)
             ),
             batch_size=64
         )
@@ -817,7 +843,9 @@ if __name__ == "__main__":
 
     # save results
     df = pd.DataFrame(results)
-    df.to_csv("final_structure_comparison.csv", index=False)
+    df.to_csv("final_structure_comparison_trained_on_Devmo_tested_on_Daisee.csv", index=False)
+
+    
 
     print("\nDONE")
 # if __name__ == "__main__":
