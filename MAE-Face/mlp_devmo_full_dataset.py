@@ -252,41 +252,9 @@ def evaluate_combo(architecture,lr,wd,drop,thresh_grid,device,train_dataset,inpu
     return {'architecture': architecture, 'learning_rate': lr, 'weight_decay': wd, 'dropout': drop, 'best_threshold': combo_best_threshold, 'combo_best_f1': combo_best_metrics_summary['f1'], 'combo_best_auc': combo_best_metrics_summary['auc'], 'combo_best_acc': combo_best_metrics_summary['acc'], 'combo_best_prec': combo_best_metrics_summary['prec'], 'combo_best_rec': combo_best_metrics_summary['rec'], 'combo_best_kappa': combo_best_metrics_summary['kappa'], 'combo_best_epoch': combo_best_metrics_summary['epoch']},combo_best_fold0_weights
 
 
+
                                         
-def final_training_and_evaluation(hidden_grid, train_dataset,devmo_test_dataset, daisee_test_dataset, device):
-    results=[]
-    for h in hidden_grid:
-        print("\n====================")
-        print("Structure:", h)
 
-        ckpt_path=f"models/MLP/mixed/MLP_{'_'.join(map(str,h))}_best_structure_model.pth"
-        ckpt=torch.load(ckpt_path, map_location="cpu", weights_only=False)
-        hp=ckpt["hyperparameters"]
-        model=EmotionMLP(input_size=768, hidden_layers=h, dropout_rate=hp["dropout"], num_classes=2).to(device)
-        
-        train_model(model, train_dataset, lr=hp["lr"], wd=hp["wd"], epochs=hp['structure_best_epoch'], device=device)
-        test_loader_A=DataLoader(devmo_test_dataset, batch_size=64)
-        metrics_A=test_model(model, test_loader_A, hp["best_threshold"], device)
-        test_loader_B=DataLoader(daisee_test_dataset, batch_size=64)
-        metrics_B=test_model(model, test_loader_B, hp["best_threshold"], device)
-
-        save_path=f"models/MLP/mixed/MLP_{'_'.join(map(str,h))}_final_model.pth"
-        torch.save({
-            'model_state_dict': model.state_dict(),
-            'architecture': h,
-            'hyperparameters': hp, 
-        }, save_path)
-        results.append({
-            "structure": str(h),
-            "metrics_A": metrics_A,
-            "metrics_B": metrics_B
-        })
-        print("A:", metrics_A)
-        print("B:", metrics_B)
-
-    #save CSV
-    df=pd.DataFrame(results)
-    df.to_csv("A_B_joint_training_final_results.csv", index=False)
 
 
     
@@ -387,6 +355,58 @@ def train_model(model, train_dataset, lr, wd, epochs, device):
 
         print(f"Epoch {ep+1}/{epochs} | loss={total_loss/len(train_loader):.4f}")
 
+def final_training_and_evaluation(hidden_grid, train_dataset,devmo_test_dataset, daisee_test_dataset, device):
+    results=[]
+    for h in hidden_grid:
+        print("\n====================")
+        print("Structure:", h)
+
+        ckpt_path=f"models/MLP/mixed/MLP_{'_'.join(map(str,h))}_best_structure_model.pth"
+        ckpt=torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        hp=ckpt["hyperparameters"]
+        model=EmotionMLP(input_size=768, hidden_layers=h, dropout_rate=hp["dropout"], num_classes=2).to(device)
+        
+        train_model(model, train_dataset, lr=hp["lr"], wd=hp["wd"], epochs=hp['structure_best_epoch'], device=device)
+        test_loader_A=DataLoader(devmo_test_dataset, batch_size=64)
+        metrics_A=test_model(model, test_loader_A, hp["best_threshold"], device)
+        test_loader_B=DataLoader(daisee_test_dataset, batch_size=64)
+        metrics_B=test_model(model, test_loader_B, hp["best_threshold"], device)
+
+        save_path=f"models/MLP/mixed/MLP_{'_'.join(map(str,h))}_final_model.pth"
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'architecture': h,
+            'hyperparameters': hp, 
+        }, save_path)
+        results.append({
+            "structure": str(h),
+            "metrics_A": metrics_A,
+            "metrics_B": metrics_B
+        })
+        print("A:", metrics_A)
+        print("B:", metrics_B)
+
+    #save CSV
+    df=pd.DataFrame(results)
+    df.to_csv("A_B_joint_training_final_results.csv", index=False)
+
+def evaluate_final_model(hidden_layer_variants, test_dataset, device):
+    
+    for h in hidden_layer_variants:
+        print("\n====================")
+        print("Structure:", h)
+
+        ckpt_path=f"models/MLP/mixed/MLP_{'_'.join(map(str,h))}_final_model.pth"
+        ckpt=torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        hp=ckpt["hyperparameters"]
+        print(hp)
+        model=EmotionMLP(input_size=768, hidden_layers=h, dropout_rate=hp["dropout"], num_classes=2).to(device)
+        model.load_state_dict(ckpt["model_state_dict"])
+        test_loader_B_all=DataLoader(test_dataset, batch_size=64)
+       
+        metrics_B=test_model(model, test_loader_B_all, hp["best_threshold"], device)
+
+        print("B:", metrics_B)
 
 # =========================
 # MAIN
@@ -431,6 +451,7 @@ if __name__ == "__main__":
     num_A_train = os.path.getsize(A_train_feat) // (768 * 4)
     num_A_test  = os.path.getsize(A_test_feat) // (768 * 4)
     num_B_train = os.path.getsize(B_train_feat) // (768 * 4)
+    
     num_B_test  = os.path.getsize(B_test_feat) // (768 * 4)
 
     train_dataset = ConcatDataset([
@@ -459,11 +480,20 @@ if __name__ == "__main__":
     devmo_test_dataset=FeatureDataset(A_test_feat, A_test_label, num_A_test)
     daisee_test_dataset=FeatureDataset(B_test_feat, B_test_label, num_B_test)
 
-    final_training_and_evaluation(
-        hidden_grid=hidden_layer_variants, 
-        train_dataset=train_dataset,
-        devmo_test_dataset=devmo_test_dataset,
-        daisee_test_dataset=daisee_test_dataset,
-        device=device
-        )
    
+    # final_training_and_evaluation(
+    #     hidden_grid=hidden_layer_variants, 
+    #     train_dataset=train_dataset,
+    #     devmo_test_dataset=devmo_test_dataset,
+    #     daisee_test_dataset=daisee_test_dataset,
+    #     device=device
+    #     )
+
+
+    #just test for all features in val set in daisee
+    
+    # B_test_feat_all  = f"{data_dir}/Val-all_feats_cc.npy"
+    # B_test_label_all = f"{data_dir}/Val-all_labels_cc.npy"
+    # num_B_test_all  = os.path.getsize(B_test_feat_all) // (768 * 4)
+    # daisee_test_dataset_all=FeatureDataset(B_test_feat_all, B_test_label_all, num_B_test_all)
+    evaluate_final_model(hidden_layer_variants, daisee_test_dataset, device)

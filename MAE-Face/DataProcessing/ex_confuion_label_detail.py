@@ -1,9 +1,17 @@
 import pandas as pd
 
+
+def extract_confusion_statistics(src,dst):
+    df = pd.read_csv(src)
+    confusion_counts=df['Confusion'].value_counts()
+    for value, count in confusion_counts.items():
+        print(f"Confusion value {value}: {count} samples")
+
+
 def extract_confusion_label(src,dst):
     # Load the CSV
     df = pd.read_csv(src)
-
+    
     # Binarize the Confusion label
     # # 0 or 1 -> 0, 2 or 3 -> 1
     # df['Confusion'] = df['Confusion'].apply(lambda x: 1 if x >= 2 else 0)
@@ -34,8 +42,15 @@ def extract_confusion_label(src,dst):
 
 if __name__ == "__main__":
     #extact_training_confusion_label
-    extract_confusion_label('../../confusion_dataset/DAiSEE/Labels/TrainLabels.csv','../../confusion_dataset/DAiSEE/Labels/4_TrainLabels_confusion.csv')
-    #extact_validation_confusion_label
+    # extract_confusion_label('../../confusion_dataset/DAiSEE/Labels/TrainLabels.csv','../../confusion_dataset/DAiSEE/Labels/4_TrainLabels_confusion.csv')
+    # # extact_validation_confusion_label
     # extract_confusion_label('../../csonfusion_dataset/DAiSEE/Labels/ValidationLabels.csv','../../confusion_dataset/DAiSEE/Labels/4_ValidationLabels_confusion.csv')
     # #extact_test_confusion_label            
     # extract_confusion_label('../../confusion_dataset/DAiSEE/Labels/TestLabels.csv','../../confusion_dataset/DAiSEE/Labels/TestLabels_confusion.csv')
+
+    
+    extract_confusion_statistics('../../confusion_dataset/DAiSEE/Labels/TrainLabels.csv','../../confusion_dataset/DAiSEE/Labels/4_TrainLabels_confusion.csv')
+
+    extract_confusion_statistics('../../confusion_dataset/DAiSEE/Labels/ValidationLabels.csv','../../confusion_dataset/DAiSEE/Labels/4_ValidationLabels_confusion.csv')
+
+    extract_confusion_statistics('../../confusion_dataset/DAiSEE/Labels/TestLabels.csv','../../confusion_dataset/DAiSEE/Labels/TestLabels_confusion.csv')
