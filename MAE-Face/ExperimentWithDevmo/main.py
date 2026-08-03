@@ -1,7 +1,7 @@
 # =========================
 # MAIN
 # =========================
-from .experiments.grid_search import train_mlp_grid_search
+from .training.grid_search import train_mlp_grid_search
 from pathlib import Path
 from .datasets.daisee_parser import DaiseeParser
 from .datasets.devmo_parser import DevmoParser
@@ -10,36 +10,63 @@ from .datasets.frame_dataset import FrameDataset
 from .features.mae_extractor import MAEExtractor
 from .features.feature_repository import FeatureRepository
 from .datasets.feature_dataset import FeatureDataset
+from .testing.tester import Tester
 import pandas as pd
 import os
 
+
 PROJECT_ROOT=Path(__file__).resolve().parents[2]
+
+def build_dataset(dataset_path, label_path, sampler,parser_class):
+    label_df=pd.read_csv(label_path)
+    label_dict=dict(zip(label_df['clipID'],label_df['label']))
+    parser=parser_class(dataset_path,label_dict,sampler)
+    samples=parser.parse()
+    dataset=FrameDataset(samples)
+    return dataset
+    
+
+def extract_features(extractor, batch_size,dataset,feature_dir,save_prefix):
+    feature_repository=FeatureRepository(batch_size=batch_size)
+    feature_repository.store(dataset,feature_dir,save_prefix, extractor)
+
+    print(f"Features extracted and stored in {feature_dir} with prefix {save_prefix}.")
+
+def build_feature_dataset(feature_dir, save_prefix):
+    feature_path = feature_dir / f"{save_prefix}_feats.npy"
+    label_path = feature_dir / f"{save_prefix}_labels.npy"
+    num_samples = os.path.getsize(feature_path) // (768 * 4)
+    return FeatureDataset(feature_path, label_path, num_samples)
+
+def train_mlp(feature_dir, save_prefix, hidden_grid, lr_grid, wd_grid, drop_grid, thresh_grid, num_classes, input_size, num_epochs, device):
+    feature_dataset = build_feature_dataset(feature_dir, save_prefix)
+    train_mlp_grid_search(input_size, hidden_grid, lr_grid, wd_grid, drop_grid, thresh_grid,
+                                   num_classes=num_classes, num_epochs=num_epochs, device=device, train_dataset=feature_dataset)
+
+    
+
+def evaluate_models():
+    pass
 
 if __name__ == "__main__":
     batch_size=64
-    #settings for video, model load path
-
     device='cuda'
     # img_size = 224
-    #load the training dataset and labels
-    # devmo_dataset_path=PROJECT_ROOT/"confusion_dataset"/"Devmo"/"devemo+"
-    # devmo_train_df=pd.read_csv(devmo_dataset_path/"train.csv")
-    # devmo_train_label_dict=dict(zip(devmo_train_df['clipID'], devmo_train_df['label']))
-    # devmo_test_df=pd.read_csv(devmo_dataset_path/"test.csv")
-    # devmo_test_label_dict=dict(zip(devmo_test_df['clipID'], devmo_test_df['label']))    
+#     load the training dataset and labels
+    devmo_dataset_path=PROJECT_ROOT/"confusion_dataset"/"Devmo"/"devemo+"
+    devmo_train_label_path=PROJECT_ROOT/"confusion_dataset"/"Devmo"/"devemo+"/"train.csv"
+    devmo_test_label_path=PROJECT_ROOT/"confusion_dataset"/"Devmo"/"devemo+"/"test.csv"
 
-    # sampler=Sampler(fps=15)
-    # devmo_train_samples_parser=DevmoParser(devmo_dataset_path,devmo_train_label_dict,sampler)
-    # devmo_train_samples=devmo_train_samples_parser.parse()
-    # #img, label type(tensor)
-    # devmo_train_frame_dataset=FrameDataset(devmo_train_samples)
-    # mae_extractor=MAEExtractor(ckpt_path=PROJECT_ROOT/"MAE-Face"/"models"/"MAE"/"mae_face_pretrain_vit_base.pth",device=device,feature_dim=768)
-    # feature_repository=FeatureRepository(batch_size=batch_size)
+    devmo_train_dataset=build_dataset(devmo_dataset_path,devmo_train_label_path,Sampler(fps=15),DevmoParser)
+    devmo_test_dataset=build_dataset(devmo_dataset_path,devmo_test_label_path,Sampler(fps=15),DevmoParser)
+
+    mae_extractor=MAEExtractor(ckpt_path=PROJECT_ROOT/"MAE-Face"/"models"/"MAE"/"mae_face_pretrain_vit_base.pth",device=device,feature_dim=768)
     feature_dir=PROJECT_ROOT/"MAE-Face"/"ExperimentWithDevmo"/"data"/"features"
-    # feature_repository.store(devmo_train_frame_dataset,feature_dir,"devmo_train", mae_extractor)
+    extract_features(mae_extractor,batch_size,devmo_train_dataset,feature_dir,"devmo_train")
+    extract_features(mae_extractor,batch_size,devmo_test_dataset,feature_dir,"devmo_test")
 
     
-    print("Feature extraction completed. You can now train the MLP models using the extracted features saved in the ./Features directory.")
+    
 
 
     # hidden_grid = [
@@ -62,16 +89,33 @@ if __name__ == "__main__":
     # =========================
     # devmo feature dataset
     # =========================
-    devmo_train_feature = feature_dir/"devmo_train_feats.npy"
-    devmo_train_label = feature_dir/"devmo_train_labels.npy"
-    num_devmo_train_samples = os.path.getsize(devmo_train_feature) // (768 * 4)
+#     devmo_train_feature = feature_dir/"devmo_train_feats.npy"
+#     devmo_train_label = feature_dir/"devmo_train_labels.npy"
+#     devmo_test_feature = feature_dir/"devmo_test_feats.npy"
+#     devmo_test_label = feature_dir/"devmo_test_labels.npy"
 
-    devmo_train_feature_dataset=FeatureDataset(devmo_train_feature,devmo_train_label,num_devmo_train_samples)
+    #CV train model on devmo train dataset
+    train_mlp(feature_dir, "devmo_train", hidden_grid, lr_grid, wd_grid, drop_grid, thresh_grid, num_classes, input_size, num_epochs=60, device=device)
+    #CV test model on devmo testdataset
 
-    train_mlp_grid_search(input_size, hidden_grid, lr_grid, wd_grid, drop_grid, thresh_grid, 
-                                   num_classes=2, num_epochs=60, device='cuda', train_dataset=devmo_train_feature_dataset)
-    # A_test_feat  = f"{data_dir}/Devmo-test_feats.npy"
-    # A_test_label = f"{data_dir}/Devmo-test_labels.npy"
+    
+    
+    #CV train model on daisee train dataset
+    model_dir=PROJECT_ROOT/"MAE-Face"/"ExperimentWithDevmo"/"data"/"models"
+    tester=Tester(build_feature_dataset(feature_dir, "devmo_test"), device)
+    for h in hidden_grid:
+        print(f"Testing model with hidden layers: {h}")
+        tester.test_model(model_dir/f"MLP_best_structure_model_{h}.pth",h)
+
+    #CV test model on daisee test dataset
+
+    #CV model on devmo train dataset and test on daisee test dataset
+
+    #CV model on daisee train dataset and test on devmo test dataset
+
+    #train model on mixed dataset and test seperately on devmo and daisee test datasets
+
+
 
     # =========================
     # daisee dataset

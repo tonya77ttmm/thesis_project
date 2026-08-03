@@ -181,62 +181,62 @@ class FrameDatasetDevmo(FrameDataset):
                 #     self.samples.append((os.path.join(open_face_dir, face_file), final_label))
         print(f"Total filtered samples: {len(self.samples)}")
 
-def extract_features_single_file(model_name, batch_size, device, dataset_path, label_dict, save_subdir):
-    """
-    Extracts features and saves EACH frame as an individual .pt file.
-    """
-    # 1. Initialize Model
-    model = getattr(models_vit, model_name)(
-        global_pool=True,
-        num_classes=num_heads,
-        drop_path_rate=0.1,
-        img_size=224,
-    )
+# def extract_features_single_file(model_name, batch_size, device, dataset_path, label_dict, save_subdir):
+#     """
+#     Extracts features and saves EACH frame as an individual .pt file.
+#     """
+#     # 1. Initialize Model
+#     model = getattr(models_vit, model_name)(
+#         global_pool=True,
+#         num_classes=num_heads,
+#         drop_path_rate=0.1,
+#         img_size=224,
+#     )
     
-    checkpoint = torch.load(ckpt_path, map_location='cpu', weights_only=False)
-    model.load_state_dict(checkpoint['model'], strict=False)
-    model.to(device)
-    model.eval()
+#     checkpoint = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+#     model.load_state_dict(checkpoint['model'], strict=False)
+#     model.to(device)
+#     model.eval()
 
-    # 2. Setup Directories
-    # Creates e.g., ./Features/Training_features/
-    output_dir = os.path.join("./Features", save_subdir)
-    os.makedirs(output_dir, exist_ok=True)
+#     # 2. Setup Directories
+#     # Creates e.g., ./Features/Training_features/
+#     output_dir = os.path.join("./Features", save_subdir)
+#     os.makedirs(output_dir, exist_ok=True)
 
-    # 3. Load Dataset
-    dataset = FrameDataset(dataset_path, label_dict, img_size)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+#     # 3. Load Dataset
+#     dataset = FrameDataset(dataset_path, label_dict, img_size)
+#     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    print(f"Starting extraction to {output_dir}...")
+#     print(f"Starting extraction to {output_dir}...")
     
-    global_frame_count = 0
-    with torch.no_grad():
-        for batch_frames, batch_labels in dataloader:
-            batch_frames = batch_frames.to(device)
-            # ViT forward pass
-            _, features = model(batch_frames, ret_feature=True)
+#     global_frame_count = 0
+#     with torch.no_grad():
+#         for batch_frames, batch_labels in dataloader:
+#             batch_frames = batch_frames.to(device)
+#             # ViT forward pass
+#             _, features = model(batch_frames, ret_feature=True)
             
-            # features is [B, 768], labels is [B]
-            features = features.cpu()
-            batch_labels = batch_labels.cpu()
+#             # features is [B, 768], labels is [B]
+#             features = features.cpu()
+#             batch_labels = batch_labels.cpu()
 
-            # 4. Save each frame individually
-            for i in range(features.size(0)):
-                single_feature = features[i]  # Shape: [768]
-                single_label = batch_labels[i] # Shape: []
+#             # 4. Save each frame individually
+#             for i in range(features.size(0)):
+#                 single_feature = features[i]  # Shape: [768]
+#                 single_label = batch_labels[i] # Shape: []
                 
-                save_file = os.path.join(output_dir, f"frame_{global_frame_count:07d}.pt")
-                torch.save({
-                    'features': single_feature, 
-                    'labels': single_label
-                }, save_file)
+#                 save_file = os.path.join(output_dir, f"frame_{global_frame_count:07d}.pt")
+#                 torch.save({
+#                     'features': single_feature, 
+#                     'labels': single_label
+#                 }, save_file)
                 
-                global_frame_count += 1
+#                 global_frame_count += 1
 
-            if global_frame_count % 1000 == 0:
-                print(f"Processed {global_frame_count} frames...")
+#             if global_frame_count % 1000 == 0:
+#                 print(f"Processed {global_frame_count} frames...")
 
-    print(f"Finished! Total frames saved: {global_frame_count}")
+#     print(f"Finished! Total frames saved: {global_frame_count}")
 
 
 def extract_features_mmap(model_name, batch_size, device, dataset_path, label_dict, save_prefix,strategy,training,dataset):
@@ -291,35 +291,35 @@ def extract_features_mmap(model_name, batch_size, device, dataset_path, label_di
     labels_mmap.flush()
     print(f"Finished! Files saved: {feat_file} and {label_file}")
 
-def extract_features(model_name, batch_size,device,dataset_path, label_dict,save_path):
-    #load the model to get features ???parameters
-    model = getattr(models_vit, model_name)(
-    global_pool=True,
-    num_classes=num_heads,
-    drop_path_rate=0.1,
-    img_size=224,
-    )
-    checkpoint = torch.load(ckpt_path, map_location='cpu',weights_only=False)
-    checkpoint_model = checkpoint['model']
-    msg = model.load_state_dict(checkpoint_model, strict=False)
-    model.to(device)
-    model.eval()
+# def extract_features(model_name, batch_size,device,dataset_path, label_dict,save_path):
+#     #load the model to get features ???parameters
+#     model = getattr(models_vit, model_name)(
+#     global_pool=True,
+#     num_classes=num_heads,
+#     drop_path_rate=0.1,
+#     img_size=224,
+#     )
+#     checkpoint = torch.load(ckpt_path, map_location='cpu',weights_only=False)
+#     checkpoint_model = checkpoint['model']
+#     msg = model.load_state_dict(checkpoint_model, strict=False)
+#     model.to(device)
+#     model.eval()
 
-    #load dataset
-    dataset = FrameDataset(dataset_path, label_dict, img_size)
-    dataloader=DataLoader(dataset,batch_size=batch_size,shuffle=False)
-    # all_features=[]
-    # all_labels = []
-    features_path=os.makedirs("./Features",exist_ok=True)
-    #get the features from the model
-    with torch.no_grad():
-        #get the features from the model
-        for batch_index,(batch_frames, batch_labels) in enumerate(dataloader):
-            batch_frames = batch_frames.to(device)
-            outputs, features = model(batch_frames, ret_feature=True)
-            features_save_path=os.path.join("./Features",save_path)
-            feature_batch_path=os.path.join(features_save_path,f"features_batch_{batch_index}.pt")
-            torch.save({'features':features.cpu(),'labels':batch_labels},feature_batch_path)
+#     #load dataset
+#     dataset = FrameDataset(dataset_path, label_dict, img_size)
+#     dataloader=DataLoader(dataset,batch_size=batch_size,shuffle=False)
+#     # all_features=[]
+#     # all_labels = []
+#     features_path=os.makedirs("./Features",exist_ok=True)
+#     #get the features from the model
+#     with torch.no_grad():
+#         #get the features from the model
+#         for batch_index,(batch_frames, batch_labels) in enumerate(dataloader):
+#             batch_frames = batch_frames.to(device)
+#             outputs, features = model(batch_frames, ret_feature=True)
+#             features_save_path=os.path.join("./Features",save_path)
+#             feature_batch_path=os.path.join(features_save_path,f"features_batch_{batch_index}.pt")
+#             torch.save({'features':features.cpu(),'labels':batch_labels},feature_batch_path)
            
     #         all_features.append(features.cpu())#features shape: [batch_size, 768]
     #         all_labels.append(batch_labels)#labels shape:[batch_size]
