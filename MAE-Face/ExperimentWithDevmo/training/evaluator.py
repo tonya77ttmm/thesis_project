@@ -13,19 +13,20 @@ class Evaluator:
     def __init__(self,device,):
         self.device=device
         self.criterion = nn.CrossEntropyLoss()
-    def test_model(self, model, loader, threshold):
-        all_y, all_p,_=self.__run_inference(model,loader)
-
-        pred = (all_p >= threshold).astype(int)
-
+    def __calculate_metrics(self, y_true,y_pred,y_prob):
         return Metrics(
-        f1= f1_score(all_y, pred),
-        acc= accuracy_score(all_y, pred),
-        prec= precision_score(all_y, pred),
-        rec =recall_score(all_y, pred),
-        kappa= cohen_kappa_score(all_y, pred),
-        auc=roc_auc_score(all_y, all_p),
+        f1= f1_score(y_true, y_pred),
+        acc= accuracy_score(y_true, y_pred),
+        prec= precision_score(y_true, y_pred),
+        rec =recall_score(y_true, y_pred),
+        kappa= cohen_kappa_score(y_true, y_pred),
+        auc=roc_auc_score(y_true, y_prob),
     )
+    def evaluate_threshold(self, model, loader, threshold):
+        all_y, all_p,_=self.__run_inference(model,loader)
+        pred = (all_p >= threshold).astype(int)
+        return self.__calculate_metrics(all_y, pred, all_p)
+    
     def __run_inference(self,model,loader):
         model.eval()
         all_labels, all_probs = [], []
@@ -50,18 +51,10 @@ class Evaluator:
         return all_labels, all_probs, val_loss      
     def evaluate_all_thresholds(self,model, loader, thresholds):
         all_labels, all_probs,val_loss=self.__run_inference(model,loader)
-        auc_roc = roc_auc_score(all_labels, all_probs)
         thresh_metrics = {}
         for t in thresholds:
             preds = (all_probs >= t).astype(int)
-        
-            f1 = f1_score(all_labels, preds, pos_label=1, zero_division=0)
-            prec = precision_score(all_labels, preds, pos_label=1, zero_division=0)
-            rec = recall_score(all_labels, preds, pos_label=1, zero_division=0)
-            acc = accuracy_score(all_labels, preds)
-            kappa = cohen_kappa_score(all_labels, preds)
-        
-            thresh_metrics[t] = Metrics(f1=f1,prec=prec,rec=rec,acc=acc,kappa=kappa,auc=auc_roc)
+            thresh_metrics[t] = self.__calculate_metrics(all_labels, preds, all_probs)
         return thresh_metrics, val_loss
 
 

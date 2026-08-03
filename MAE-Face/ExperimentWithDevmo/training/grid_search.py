@@ -1,6 +1,6 @@
 from pathlib import Path
-from ..training.cross_validator import CrossValidator
-from ..training.evaluator import Evaluator
+from .cross_validator import CrossValidator
+from .evaluator import Evaluator
 import torch
 def train_mlp_grid_search(input_size, hidden_grid, lr_grid, wd_grid, drop_grid, thresh_grid, 
                            num_classes=2, num_epochs=60, device='cuda', train_dataset=None):
