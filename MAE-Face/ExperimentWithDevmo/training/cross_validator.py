@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold
 from ..models.emotion_mlp import EmotionMLP
 from torch.utils.data import Subset
 from ..training.trainer import Trainer
@@ -16,24 +16,30 @@ class CrossValidator:
         self.evaluator=evaluator
     def evaluate_combo(self,architecture,lr,wd,drop,input_size,num_classes):
         all_indices=np.arange(len(self.train_dataset))
-        all_labels=self.train_dataset.labels
-        skf=StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        all_labels=np.array(self.train_dataset.labels)
+        groups=np.array(self.train_dataset.clip_ids)
+        skf=StratifiedGroupKFold(n_splits=5,shuffle=True, random_state=42)
         fold_metrics_accumulator={t:[] for t in self.thresh_grid} #[Metrics1, Metrics2,...Metrics5]
-        fold0_weights_snapshot=None
-        for fold,(train_idx,val_idx) in enumerate(skf.split(all_indices, all_labels)):
+        best_fold_f1 = -1
+        best_fold_weights = None
+        for fold,(train_idx,val_idx) in enumerate(skf.split(all_indices, all_labels, groups)):
             train_subset=Subset(self.train_dataset,train_idx)
             val_subset=Subset(self.train_dataset,val_idx)
             model=EmotionMLP(input_size,architecture,drop,num_classes).to(self.device)
             fold_best_weights_per_threshold,fold_best_metrics=self.__evaluate_one_fold(train_subset,val_subset,model,lr,wd)
             for t in self.thresh_grid:
                 fold_metrics_accumulator[t].append(fold_best_metrics[t])
-            if fold==0:
-                fold0_weights_snapshot=copy.deepcopy(fold_best_weights_per_threshold)
-
+                print(f"Fold {fold} completed. Best metrics per threshold: {fold_best_metrics}")
+            fold_best_threshold = max(self.thresh_grid,key=lambda t: fold_best_metrics[t].f1)
+            fold_best_f1 = fold_best_metrics[fold_best_threshold].f1
+            if fold_best_f1 > best_fold_f1:
+                best_fold_f1 = fold_best_f1
+                best_fold_weights = copy.deepcopy(fold_best_weights_per_threshold[fold_best_threshold])
+           
         #calculate 5-fold average performance for each threshold
         combo_best_metrics,combo_best_threshold=self.__summarize_cv_results(fold_metrics_accumulator)
-        combo_best_fold0_weights=fold0_weights_snapshot[combo_best_threshold]
-        return {'architecture': architecture, 'learning_rate': lr, 'weight_decay': wd, 'dropout': drop, 'best_threshold': combo_best_threshold, 'combo_best_metrics':combo_best_metrics},combo_best_fold0_weights
+        # combo_best_fold0_weights=fold0_weights_snapshot[combo_best_threshold]
+        return {'architecture': architecture, 'learning_rate': lr, 'weight_decay': wd, 'dropout': drop, 'best_threshold': combo_best_threshold, 'combo_best_metrics':combo_best_metrics},best_fold_weights
 
 
     def __evaluate_one_fold(self,train_dataset,val_dataset,model,lr,wd):

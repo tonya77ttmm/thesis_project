@@ -24,7 +24,7 @@ class DevmoParser(Parser):
                     selected_paths,final_label=self.sampler.sampling_strategy(label, all_faces)
                      # 4. Store final file paths
                     for face_file in selected_paths:
-                        sample=FrameSample(os.path.join(open_face_dir, face_file), final_label)
+                        sample=FrameSample(os.path.join(open_face_dir, face_file), final_label,usr)
                         samples.append(sample)
         print(f"Total filtered samples: {len(samples)}")
         return samples

@@ -58,8 +58,11 @@ import time
 # analyze features extracted from  a MAE (Masked Autoencoder) model to see if the model has  learned to distinguish between  Confusion vs. Non-confusion.
 
 # Load data
-feat_file = "../Features/Numpy_features/Train_feats_cc.npy"
-label_file = "../Features/Numpy_features/Train_labels_cc.npy"
+# feat_file = "../Features/Numpy_features/Train_feats_cc.npy"
+# label_file = "../Features/Numpy_features/Train_labels_cc.npy"
+feat_file = "../ExperimentWithDevmo/data/features/devmo_train_feats.npy"
+
+label_file = "../ExperimentWithDevmo/data/features/devmo_train_labels.npy"
 
 # Use the hardcoded shape since we know it's 5931 from your log
 num_samples = os.path.getsize(feat_file) // (768 * 4)
@@ -111,6 +114,6 @@ plt.legend()
 plt.title("t-SNE of ViT features")
 
 # Save instead of show to prevent GUI deadlock
-output_image = "train_v1.png"
+output_image = "devmo_train_feats_cluster.png"
 plt.savefig(output_image, dpi=300, bbox_inches='tight')
 print(f"Success! Plot saved as '{output_image}' in your current folder.")

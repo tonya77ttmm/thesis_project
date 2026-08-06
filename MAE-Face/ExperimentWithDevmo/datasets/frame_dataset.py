@@ -22,7 +22,7 @@ class FrameDataset(Dataset):
     def __init__(self,samples):
         self.samples = samples
         self.img_size = 224
-    
+
 
     def __len__(self):# PyTorch requires both:	__len__ /__getitem__， Otherwise DataLoader won’t work.
         return len(self.samples)
@@ -43,6 +43,6 @@ class FrameDataset(Dataset):
         img = img.transpose(2, 0, 1)
         img = torch.from_numpy(img)
 
-        return img, torch.tensor(label).long()
+        return img, torch.tensor(label).long(),sample.clip_id
 
         

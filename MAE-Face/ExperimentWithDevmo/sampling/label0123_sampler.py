@@ -1,4 +1,4 @@
-from .Sampler import Sampler
+from .sampler import Sampler
 class LabelO123Sampler(Sampler):
     def __init__(self,fps):
         super().__init__(fps)

@@ -26,8 +26,8 @@ class Trainer:
         self.device=device
         self.lr=lr
         self.wd=wd
-        self.train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4)
-        self.val_loader=DataLoader(val_dataset,batch_size=self.batch_size,shuffle=True,num_workers=4)
+        self.train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4,drop_last=True)
+        self.val_loader=DataLoader(val_dataset,batch_size=self.batch_size,shuffle=False,num_workers=4,drop_last=True)
         self.num_epochs=num_epochs
         class_weights = self.__compute_class_weights(train_dataset, self.device)
                 # Initialize a clean model for this specific fold split

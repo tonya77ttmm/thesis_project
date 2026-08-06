@@ -2,6 +2,7 @@ from pathlib import Path
 from .cross_validator import CrossValidator
 from .evaluator import Evaluator
 import torch
+import pandas as pd
 def train_mlp_grid_search(input_size, hidden_grid, lr_grid, wd_grid, drop_grid, thresh_grid, 
                            num_classes=2, num_epochs=60, device='cuda', train_dataset=None):
     PROJECT_ROOT=Path(__file__).resolve().parents[1]
@@ -56,7 +57,7 @@ def train_mlp_grid_search(input_size, hidden_grid, lr_grid, wd_grid, drop_grid, 
 
     # Export unique combination statistics to the final CSV file
     results_df = pd.DataFrame(csv_results_records)
-    csv_file_path = PROJECT_ROOT/"data"/"results"/f"mlp_grid_search_results.csv"
+    csv_file_path = PROJECT_ROOT/"data"/"performance"/f"mlp_grid_search_results.csv"
     results_df.to_csv(csv_file_path, index=False)
     print(f"\n[SAVED CSV LOG] Grid search results file saved to: {csv_file_path}\n")
                    

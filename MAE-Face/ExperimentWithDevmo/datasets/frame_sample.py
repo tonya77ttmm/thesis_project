@@ -3,3 +3,4 @@ from dataclasses import dataclass
 class FrameSample:
     path:str
     label:int
+    clip_id:str
